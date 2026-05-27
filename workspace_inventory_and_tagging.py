@@ -33,19 +33,31 @@ print(f"Workspace:    {w.config.host}")
 # MAGIC %md
 # MAGIC ## 1. List notebooks, files, and folders
 # MAGIC
-# MAGIC `workspace.list()` walks the workspace file tree. Set `recursive=True` to descend into subfolders.
+# MAGIC `workspace.list()` returns one level at a time. To walk subfolders, recurse manually
+# MAGIC on entries with `object_type == DIRECTORY`.
 
 # COMMAND ----------
 
-# Pick any path you want to scan — your home folder, a shared folder, /Workspace, etc.
-ROOT_PATH = f"/Workspace/Users/{w.current_user.me().user_name}"
+from databricks.sdk.service.workspace import ObjectType
 
-assets = list(w.workspace.list(ROOT_PATH, recursive=True))
+def walk_workspace(root: str, descend: bool = True):
+    """Yield every ObjectInfo under `root`. Set descend=False for one level only."""
+    for obj in w.workspace.list(root):
+        yield obj
+        if descend and obj.object_type == ObjectType.DIRECTORY:
+            yield from walk_workspace(obj.path, descend=True)
+
+# Pick any path you want to scan — your home folder, a shared folder, etc.
+ROOT_PATH = f"/Users/{w.current_user.me().user_name}"
+
+# Set descend=False for a top-level listing only (much faster on large trees)
+assets = list(walk_workspace(ROOT_PATH, descend=True))
 print(f"Found {len(assets)} objects under {ROOT_PATH}\n")
 
 # object_type is one of: NOTEBOOK, FILE, DIRECTORY, REPO, LIBRARY, DASHBOARD
 for a in assets[:10]:
-    print(f"  {a.object_type.value:10s}  {a.path}")
+    ot = a.object_type.value if a.object_type else "?"
+    print(f"  {ot:10s}  {a.path}")
 
 # COMMAND ----------
 
