@@ -173,9 +173,10 @@ for row in warehouses_inventory[:5]:
 
 # COMMAND ----------
 
-# All table-level tags across the metastore.
-# Use "*" for every catalog you can see (Databricks-internal catalogs are excluded),
-# or change to a specific catalog like "main" or "serverless_stable_2sfjed_catalog".
+# Pulls every UC tag visible to you across all five scopes
+# (catalogs, schemas, tables, columns, volumes) into one DataFrame.
+# Use "*" to scan every catalog (Databricks-internal catalogs are excluded),
+# or set to a specific catalog like "main".
 TARGET_CATALOG = "*"
 
 if TARGET_CATALOG == "*":
@@ -183,25 +184,35 @@ if TARGET_CATALOG == "*":
 else:
     catalog_filter = f"WHERE catalog_name = '{TARGET_CATALOG}'"
 
-table_tags_df = spark.sql(f"""
-    SELECT catalog_name, schema_name, table_name, tag_name, tag_value
+uc_tags_df = spark.sql(f"""
+    SELECT 'catalog' AS scope, catalog_name, NULL AS schema_name, NULL AS object_name, NULL AS column_name, tag_name, tag_value
+    FROM system.information_schema.catalog_tags
+    {catalog_filter}
+    UNION ALL
+    SELECT 'schema', catalog_name, schema_name, NULL, NULL, tag_name, tag_value
+    FROM system.information_schema.schema_tags
+    {catalog_filter}
+    UNION ALL
+    SELECT 'table', catalog_name, schema_name, table_name, NULL, tag_name, tag_value
     FROM system.information_schema.table_tags
     {catalog_filter}
-    ORDER BY catalog_name, schema_name, table_name
+    UNION ALL
+    SELECT 'column', catalog_name, schema_name, table_name, column_name, tag_name, tag_value
+    FROM system.information_schema.column_tags
+    {catalog_filter}
+    UNION ALL
+    SELECT 'volume', catalog_name, schema_name, volume_name, NULL, tag_name, tag_value
+    FROM system.information_schema.volume_tags
+    {catalog_filter}
+    ORDER BY scope, catalog_name, schema_name, object_name, column_name
 """)
-display(table_tags_df)
+display(uc_tags_df)
 
-if table_tags_df.count() == 0:
+if uc_tags_df.count() == 0:
     print()
-    print(f"No tagged tables found in scope: TARGET_CATALOG={TARGET_CATALOG!r}")
+    print(f"No UC tags found in scope: TARGET_CATALOG={TARGET_CATALOG!r}")
     print("If you expected tags to exist, run `SHOW CATALOGS` and update TARGET_CATALOG.")
-    print("If you're just starting out, Section 7d below shows how to apply table tags via SQL.")
-
-# Other useful views:
-#   system.information_schema.catalog_tags
-#   system.information_schema.schema_tags
-#   system.information_schema.column_tags
-#   system.information_schema.volume_tags
+    print("If you're just starting out, Section 7d below shows how to apply tags via SQL.")
 
 # COMMAND ----------
 
