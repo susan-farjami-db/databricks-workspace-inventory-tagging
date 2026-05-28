@@ -173,16 +173,29 @@ for row in warehouses_inventory[:5]:
 
 # COMMAND ----------
 
-# All table-level tags across the metastore (filtered to one catalog as an example)
-TARGET_CATALOG = "main"   # <-- change to a catalog you care about
+# All table-level tags across the metastore.
+# Use "*" for every catalog you can see (Databricks-internal catalogs are excluded),
+# or change to a specific catalog like "main" or "serverless_stable_2sfjed_catalog".
+TARGET_CATALOG = "*"
+
+if TARGET_CATALOG == "*":
+    catalog_filter = "WHERE catalog_name NOT LIKE '\\_\\_databricks\\_internal\\_%' ESCAPE '\\\\'"
+else:
+    catalog_filter = f"WHERE catalog_name = '{TARGET_CATALOG}'"
 
 table_tags_df = spark.sql(f"""
     SELECT catalog_name, schema_name, table_name, tag_name, tag_value
     FROM system.information_schema.table_tags
-    WHERE catalog_name = '{TARGET_CATALOG}'
+    {catalog_filter}
     ORDER BY catalog_name, schema_name, table_name
 """)
 display(table_tags_df)
+
+if table_tags_df.count() == 0:
+    print()
+    print(f"No tagged tables found in scope: TARGET_CATALOG={TARGET_CATALOG!r}")
+    print("If you expected tags to exist, run `SHOW CATALOGS` and update TARGET_CATALOG.")
+    print("If you're just starting out, Section 7d below shows how to apply table tags via SQL.")
 
 # Other useful views:
 #   system.information_schema.catalog_tags

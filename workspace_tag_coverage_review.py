@@ -25,8 +25,10 @@
 # Tag keys you expect every taggable asset to carry. Used for the coverage report.
 REQUIRED_TAGS = ["team", "env", "cost_center"]
 
-# UC catalogs to include in the table-tag coverage scan. Use ["*"] for all catalogs.
-TARGET_CATALOGS = ["main"]
+# UC catalogs to include in the table-tag coverage scan.
+# Default ["*"] scans every catalog visible to you (Databricks-internal catalogs are excluded).
+# Use a specific list to narrow the report, e.g. ["main", "prod"].
+TARGET_CATALOGS = ["*"]
 
 # Where to save the inventory snapshot (optional — leave None to skip persistence).
 SNAPSHOT_TABLE = None   # e.g. "main.governance.workspace_inventory_snapshot"
@@ -230,10 +232,13 @@ else:
 
 # COMMAND ----------
 
-catalog_filter = ""
-if TARGET_CATALOGS and TARGET_CATALOGS != ["*"]:
+if TARGET_CATALOGS == ["*"]:
+    catalog_filter = "WHERE table_catalog NOT LIKE '\\_\\_databricks\\_internal\\_%' ESCAPE '\\\\'"
+elif TARGET_CATALOGS:
     quoted = ", ".join(f"'{c}'" for c in TARGET_CATALOGS)
     catalog_filter = f"WHERE table_catalog IN ({quoted})"
+else:
+    catalog_filter = ""
 
 table_tag_coverage = spark.sql(f"""
     WITH all_tables AS (
@@ -262,6 +267,11 @@ table_tag_coverage = spark.sql(f"""
     ORDER BY coverage_pct ASC, t.table_catalog, t.table_schema
 """)
 display(table_tag_coverage)
+
+if table_tag_coverage.count() == 0:
+    print()
+    print(f"No tables found in scope: TARGET_CATALOGS={TARGET_CATALOGS}")
+    print("Run `SHOW CATALOGS` to see what's available, then update TARGET_CATALOGS in Section 0.")
 
 # COMMAND ----------
 
@@ -302,6 +312,17 @@ uc_missing = spark.sql(f"""
     ORDER BY t.table_catalog, t.table_schema, t.table_name
 """)
 display(uc_missing)
+
+if uc_missing.count() == 0:
+    # Distinguish "no tables in scope" from "all tables compliant"
+    tables_in_scope = spark.sql(
+        f"SELECT COUNT(*) FROM system.information_schema.tables {catalog_filter}"
+    ).collect()[0][0]
+    print()
+    if tables_in_scope == 0:
+        print(f"No tables found in scope: TARGET_CATALOGS={TARGET_CATALOGS}")
+    else:
+        print(f"All {tables_in_scope} tables in scope already carry every required tag: {REQUIRED_TAGS}")
 
 # COMMAND ----------
 
