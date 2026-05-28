@@ -95,15 +95,28 @@ for wh in w.warehouses.list():
     })
 
 # --- Lakeview dashboards (no tag support today, but counted for visibility) ---
+# Use REST directly — w.lakeview.list() only exists on databricks-sdk >= ~0.30.
 dashboard_rows = []
-for d in w.lakeview.list():
-    dashboard_rows.append({
-        "asset_type":  "dashboard",
-        "id":          d.dashboard_id,
-        "name":        d.display_name,
-        "creator":     None,
-        "tags":        {},
-    })
+try:
+    page_token = None
+    while True:
+        params = {"page_size": 100}
+        if page_token:
+            params["page_token"] = page_token
+        resp = w.api_client.do("GET", "/api/2.0/lakeview/dashboards", query=params) or {}
+        for d in resp.get("dashboards", []):
+            dashboard_rows.append({
+                "asset_type":  "dashboard",
+                "id":          d.get("dashboard_id"),
+                "name":        d.get("display_name"),
+                "creator":     None,
+                "tags":        {},
+            })
+        page_token = resp.get("next_page_token")
+        if not page_token:
+            break
+except Exception as e:
+    print(f"  (skipping Lakeview dashboards — {type(e).__name__}: {e})")
 
 all_rows = jobs_rows + cluster_rows + warehouse_rows + dashboard_rows
 inventory_pdf = pd.DataFrame(all_rows)

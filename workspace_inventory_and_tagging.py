@@ -89,14 +89,25 @@ for row in jobs_inventory[:5]:
 
 # COMMAND ----------
 
+# Use the REST API directly — w.lakeview.list() requires databricks-sdk >= ~0.30,
+# but the underlying endpoint is available in every workspace.
 dashboards = []
-for d in w.lakeview.list():
-    dashboards.append({
-        "dashboard_id":  d.dashboard_id,
-        "name":          d.display_name,
-        "path":          d.path,
-        "warehouse_id":  d.warehouse_id,
-    })
+page_token = None
+while True:
+    params = {"page_size": 100}
+    if page_token:
+        params["page_token"] = page_token
+    resp = w.api_client.do("GET", "/api/2.0/lakeview/dashboards", query=params) or {}
+    for d in resp.get("dashboards", []):
+        dashboards.append({
+            "dashboard_id":  d.get("dashboard_id"),
+            "name":          d.get("display_name"),
+            "path":          d.get("path"),
+            "warehouse_id":  d.get("warehouse_id"),
+        })
+    page_token = resp.get("next_page_token")
+    if not page_token:
+        break
 
 print(f"Found {len(dashboards)} Lakeview dashboards")
 for row in dashboards[:5]:

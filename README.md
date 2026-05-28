@@ -44,4 +44,5 @@ Both notebooks rely on the default Databricks SDK auth chain. When run **inside 
 - `w.jobs.list(limit=N)` is capped at 100 by the API. The SDK returns a paginated iterator already — don't pass `limit`.
 - Two `~/.databrickscfg` profiles pointing at the same workspace host break the SDK's CLI-auth subprocess (it can't disambiguate). Either delete the duplicate or use direct token auth.
 - `system.information_schema.table_tags` requires SELECT on `system.information_schema` (granted to all account users by default — verify if it errors).
+- `w.lakeview.list()` is only available on `databricks-sdk >= ~0.30`. The notebooks call the underlying REST endpoint (`GET /api/2.0/lakeview/dashboards`) directly so they work on any DBR.
 
